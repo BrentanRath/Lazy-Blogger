@@ -1,0 +1,41 @@
+import os
+import logging
+from slack_bolt import App
+from slack_bolt.adapter.socket_mode import SocketModeHandler
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+app = App(token=os.getenv("SLACK_BOT_TOKEN"))
+def send_message_to_channel(channel_id, message):
+    try:
+        response = app.client.chat_postMessage(
+            channel=channel_id,
+            text=message
+        )
+        logging.info(f"Message sent successfully to channel {channel_id}")
+        return response
+    except Exception as e:
+        logging.error(f"Error sending message to channel {channel_id}: {e}")
+        return None
+
+def send_message_to_default_channel(message):
+    default_channel = os.getenv("SLACK_DEFAULT_CHANNEL_ID")
+    return send_message_to_channel(default_channel, message)
+
+@app.command("/ilovegavin")
+def handle_hello_command(ack, body, respond, logger):
+    ack()
+    user_id = body.get('user_id', 'unknown')
+    respond(
+        text=f"Hello! <@{user_id}> loves Gavin! Who do you love?",
+        response_type="in_channel"
+    )
+    send_message_to_default_channel("Femboy")
+    send_message_to_channel("C093D2M5DNU", "Important announcement: The system is now online! No shit!")
+
+if __name__ == "__main__":
+
+    SocketModeHandler(app, os.getenv("SLACK_APP_TOKEN")).start()
