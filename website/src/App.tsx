@@ -8,7 +8,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const API_BASE = 'http://localhost:5000/api';
+  const API_BASE = 'https://testblogapi.notafemboy.org/api'
 
   const toggleMicrophone = async () => {
     if (!isRecording) {
