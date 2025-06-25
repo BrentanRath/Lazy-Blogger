@@ -95,7 +95,7 @@ def verify_auth_token(token):
         print(f"Token verification error: {e}")
         return None
     
-    
+
 @flask_app.route('/auth/slack/callback')
 def slack_callback():
     # Handle OAuth callback using the built-in flow
@@ -228,13 +228,11 @@ def protected_endpoint():
 
 
 
-# CORS support
 @flask_app.before_request
 def handle_preflight():
     if request.method == "OPTIONS":
         response = jsonify({'message': 'OK'})
         
-        # Same allowed origins list
         allowed_origins = [
             'https://blog.notafemboy.org',
             'http://blog.notafemboy.org',
@@ -248,40 +246,43 @@ def handle_preflight():
         
         origin = request.headers.get('Origin')
         if origin in allowed_origins:
-            response.headers.add("Access-Control-Allow-Origin", origin)
-        else:
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            
-        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
-        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
+            response.headers['Access-Control-Allow-Origin'] = origin
+        
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '86400'
         return response
 
 @flask_app.after_request
 def after_request(response):
-    # Update to include both HTTP and HTTPS frontend domains
     allowed_origins = [
-        'https://blog.notafemboy.org',  # Added HTTPS
+        'https://blog.notafemboy.org',
         'http://blog.notafemboy.org',
         'http://blog.notafemboy.org:3000',
         'http://blog.notafemboy.org:5173',
-        'https://blog.notafemboy.org:3000',  # Added HTTPS versions
+        'https://blog.notafemboy.org:3000',
         'https://blog.notafemboy.org:5173',
         'http://localhost:3000',
         'http://localhost:5173'
     ]
+    
     origin = request.headers.get('Origin')
     
-    # Always add CORS headers for allowed origins
-    if origin in allowed_origins:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    # Only add CORS headers if not already set (to avoid duplicates)
+    if origin in allowed_origins and 'Access-Control-Allow-Origin' not in response.headers:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
     
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Max-Age', '86400')
+    # Only add these headers if not already set
+    if 'Access-Control-Allow-Headers' not in response.headers:
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+    if 'Access-Control-Allow-Methods' not in response.headers:
+        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
+    if 'Access-Control-Max-Age' not in response.headers:
+        response.headers['Access-Control-Max-Age'] = '86400'
+    
     return response
-
 os.makedirs('./data/installations', exist_ok=True)
 os.makedirs('./data/states', exist_ok=True)
 

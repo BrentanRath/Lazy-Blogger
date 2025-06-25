@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import './App.css'
 
 interface User {
@@ -19,23 +19,51 @@ function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   const API_BASE = 'https://testblogapi.notafemboy.org/api'
 
   // Check authentication on component mount
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
+    console.log('=== DASHBOARD COMPONENT MOUNTED ===');
+    console.log('Current URL:', window.location.href);
+    console.log('Search params:', Object.fromEntries(searchParams.entries()));
+    
+    // First, check if there's a token in the URL (from OAuth callback)
+    const authStatus = searchParams.get('auth');
+    const urlToken = searchParams.get('token');
+    
+    if (authStatus === 'success' && urlToken) {
+      console.log('DASHBOARD: Found token in URL, storing and verifying...');
+      // Store token in localStorage
+      localStorage.setItem('auth_token', urlToken);
+      
+      // Clean the URL
+      window.history.replaceState({}, document.title, '/dashboard');
+      
+      // Verify the token
+      checkAuthStatus();
+    } else {
+      console.log('DASHBOARD: No URL token, checking localStorage...');
+      // Check for existing token in localStorage
+      checkAuthStatus();
+    }
+  }, [searchParams]);
 
   const checkAuthStatus = async () => {
+    console.log('=== DASHBOARD: checkAuthStatus called ===');
+    
     const token = localStorage.getItem('auth_token');
+    console.log('Token from localStorage:', token ? token.substring(0, 50) + '...' : 'None');
+    
     if (!token) {
+      console.log('DASHBOARD: No token found, redirecting to login');
       navigate('/login');
       return;
     }
 
     try {
-      console.log('Dashboard checking auth with token:', token.substring(0, 50) + '...');
+      console.log('DASHBOARD: Verifying token with API...');
       
       const response = await fetch('https://testblogapi.notafemboy.org/auth/verify', {
         headers: {
@@ -44,26 +72,28 @@ function Dashboard() {
         }
       });
       
-      console.log('Dashboard auth response status:', response.status);
+      console.log('DASHBOARD: Auth response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Dashboard auth response data:', data);
+        console.log('DASHBOARD: Auth response data:', data);
         
         if (data.authenticated) {
+          console.log('DASHBOARD: User authenticated, setting user data');
           setUser(data.user);
           setIsAuthenticated(true);
         } else {
+          console.log('DASHBOARD: User not authenticated, redirecting to login');
           localStorage.removeItem('auth_token');
           navigate('/login');
         }
       } else {
-        console.log('Dashboard auth response not ok:', response.status);
+        console.log('DASHBOARD: Auth verification failed, redirecting to login');
         localStorage.removeItem('auth_token');
         navigate('/login');
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error('DASHBOARD: Auth check failed:', error);
       localStorage.removeItem('auth_token');
       navigate('/login');
     } finally {
