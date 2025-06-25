@@ -9,7 +9,8 @@ import os
 from dotenv import load_dotenv
 import secrets
 from functools import wraps
-
+import jwt
+from datetime import datetime, timedelta
 load_dotenv()
 
 flask_app = Flask(__name__)
@@ -62,17 +63,50 @@ def slack_login():
     )
     
     return redirect(authorization_url)
+
+
+
+
+# TOKEN CRAP-----------
+def generate_auth_token(user_info, team_info):
+    payload = {
+        'user_id': user_info['id'],
+        'user_name': user_info['name'],
+        'user_email': user_info.get('email', ''),
+        'team_id': team_info['id'],
+        'team_name': team_info['name'],
+        'exp': datetime.utcnow() + timedelta(days=7)  # Token expires in 7 days
+    }
+    return jwt.encode(payload, flask_app.secret_key, algorithm='HS256')
+
+def verify_auth_token(token):
+    try:
+        print(f"Attempting to decode token: {token[:50]}...")
+        payload = jwt.decode(token, flask_app.secret_key, algorithms=['HS256'])
+        print(f"Token decoded successfully: {payload}")
+        return payload
+    except jwt.ExpiredSignatureError as e:
+        print(f"Token expired: {e}")
+        return None
+    except jwt.InvalidTokenError as e:
+        print(f"Invalid token: {e}")
+        return None
+    except Exception as e:
+        print(f"Token verification error: {e}")
+        return None
+    
+    
 @flask_app.route('/auth/slack/callback')
 def slack_callback():
     # Handle OAuth callback using the built-in flow
     if 'error' in request.args:
-        return redirect('http://blog.notafemboy.org/login?auth=error')
+        return redirect('https://blog.notafemboy.org/login?auth=error')
     
     code = request.args.get('code')
     state = request.args.get('state')
     
     if not code:
-        return redirect('http://blog.notafemboy.org/login?auth=error')
+        return redirect('https://blog.notafemboy.org/login?auth=error')
     
     try:
         # Use the OAuth flow which handles state verification internally
@@ -94,46 +128,78 @@ def slack_callback():
         user_info = identity_response['user']
         team_info = identity_response['team']
         
-        # Store user session
-        session['slack_user_token'] = oauth_response.user_token
-        session['user_id'] = user_info['id']
-        session['user_name'] = user_info['name']
-        session['user_email'] = user_info.get('email', '')
-        session['team_id'] = team_info['id']
-        session['team_name'] = team_info['name']
-        session['authenticated'] = True
+        # Generate JWT token instead of using session
+        auth_token = generate_auth_token(user_info, team_info)
         
         print("OAuth Response:", oauth_response)
         print("User Info:", user_info)
         print("Team Info:", team_info)
         
-        # Redirect to frontend
-        return redirect('http://blog.notafemboy.org/dashboard?auth=success')
+        # Redirect to frontend with token
+        return redirect(f'https://blog.notafemboy.org/dashboard?auth=success&token={auth_token}')
         
     except Exception as e:
         print(f"OAuth error: {e}")
-        return redirect('http://blog.notafemboy.org/login?auth=error')
-    
+        return redirect('https://blog.notafemboy.org/login?auth=error')
+
 
 
 @flask_app.route('/auth/verify')
 def verify_auth():
-    print(f"Session data: {dict(session)}")  # Debug line
-    print(f"Session ID: {session.sid if hasattr(session, 'sid') else 'No SID'}")  # Debug line
-    print(f"Cookies received: {request.cookies}")  # Debug line
+    print(f"=== AUTH VERIFY DEBUG ===")
+    print(f"Request headers: {dict(request.headers)}")
+    print(f"Request args: {dict(request.args)}")
     
-    if session.get('authenticated'):
+    # Check for token in Authorization header or query parameter
+    auth_header = request.headers.get('Authorization')
+    token = None
+    
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        print(f"Token from header: {token[:50]}...")
+    else:
+        token = request.args.get('token')
+        print(f"Token from args: {token[:50] if token else 'None'}...")
+    
+    if not token:
+        print("No token found!")
+        return jsonify({'authenticated': False, 'error': 'No token provided'}), 401
+    
+    user_data = verify_auth_token(token)
+    print(f"Token verification result: {user_data}")
+    
+    if user_data:
         return jsonify({
             'authenticated': True,
             'user': {
-                'id': session.get('user_id'),
-                'name': session.get('user_name'),
-                'email': session.get('user_email'),
-                'team': session.get('team_name')
+                'id': user_data['user_id'],
+                'name': user_data['user_name'],
+                'email': user_data['user_email'],
+                'team': user_data['team_name']
             }
         })
-    return jsonify({'authenticated': False}), 401
+    
+    print("Token verification failed!")
+    return jsonify({'authenticated': False, 'error': 'Invalid token'}), 401
 
+
+
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_auth_token(token)
+        if not user_data:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        # Add user data to request context
+        request.user_data = user_data
+        return f(*args, **kwargs)
+    return decorated_function
 
 @flask_app.route('/auth/logout', methods=['POST'])
 def logout():
@@ -167,20 +233,40 @@ def protected_endpoint():
 def handle_preflight():
     if request.method == "OPTIONS":
         response = jsonify({'message': 'OK'})
-        response.headers.add("Access-Control-Allow-Origin", request.headers.get('Origin', '*'))
-        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization")
+        
+        # Same allowed origins list
+        allowed_origins = [
+            'https://blog.notafemboy.org',
+            'http://blog.notafemboy.org',
+            'http://blog.notafemboy.org:3000',
+            'http://blog.notafemboy.org:5173',
+            'https://blog.notafemboy.org:3000',
+            'https://blog.notafemboy.org:5173',
+            'http://localhost:3000',
+            'http://localhost:5173'
+        ]
+        
+        origin = request.headers.get('Origin')
+        if origin in allowed_origins:
+            response.headers.add("Access-Control-Allow-Origin", origin)
+        else:
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            
+        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
         response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
 
-
 @flask_app.after_request
 def after_request(response):
-    # Update to include the correct frontend domain
+    # Update to include both HTTP and HTTPS frontend domains
     allowed_origins = [
+        'https://blog.notafemboy.org',  # Added HTTPS
         'http://blog.notafemboy.org',
         'http://blog.notafemboy.org:3000',
         'http://blog.notafemboy.org:5173',
+        'https://blog.notafemboy.org:3000',  # Added HTTPS versions
+        'https://blog.notafemboy.org:5173',
         'http://localhost:3000',
         'http://localhost:5173'
     ]
