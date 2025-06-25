@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   team: string;
+  profilePicture?: string;
 }
 
 function Home() {
@@ -104,11 +105,31 @@ function Home() {
       <h1>Welcome ^w^</h1>
       
       
-      {isAuthenticated ? (
-        <div>
-          <p>You are logged in as {user?.name}.</p>
-          <button 
-            onClick={handleDashboard}
+{isAuthenticated ? (
+  <div>
+    <div style={{ 
+      display: 'flex', 
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '10px', 
+      marginBottom: '20px' 
+    }}>
+      {user?.profilePicture && (
+        <img 
+          src={user.profilePicture} 
+          alt={`${user.name}'s profile`} 
+          style={{ 
+            width: '40px', 
+            height: '40px', 
+            borderRadius: '50%', 
+            objectFit: 'cover' 
+          }} 
+        />
+      )}
+      <p>You are logged in as {user?.name}.</p>
+    </div>
+    <button 
+      onClick={handleDashboard}
             style={{
               backgroundColor: '#007bff',
               color: 'white',

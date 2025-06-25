@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   team: string;
+  profilePicture?: string;
 }
 
 function Login() {

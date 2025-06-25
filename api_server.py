@@ -30,7 +30,7 @@ flask_app.config['SESSION_COOKIE_PATH'] = '/'
 oauth_settings = OAuthSettings(
     client_id=os.getenv('SLACK_AUTH_CLIENT_ID'),
     client_secret=os.getenv('SLACK_AUTH_CLIENT_SECRET'),
-    scopes=["identity.basic", "identity.email", "identity.team"],
+    scopes=["identity.basic", "identity.email", "identity.team", "identity.avatar"],
     installation_store=FileInstallationStore(base_dir="./data/installations"),
     state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
 )
@@ -51,7 +51,7 @@ def slack_login():
     
     authorize_url_generator = AuthorizeUrlGenerator(
         client_id=os.getenv('SLACK_AUTH_CLIENT_ID'),
-        user_scopes=["identity.basic", "identity.email", "identity.team"],
+        user_scopes=["identity.basic", "identity.email", "identity.team", "identity.avatar"],
     )
     
     authorization_url = authorize_url_generator.generate(
@@ -147,6 +147,7 @@ def generate_auth_token(user_info, team_info):
         'user_email': user_info.get('email', ''),
         'team_id': team_info['id'],
         'team_name': team_info['name'],
+        'profile_picture': user_info.get('image_512') or user_info.get('image_192') or user_info.get('image_72') or user_info.get('image_48') or user_info.get('image_24'),
         'exp': datetime.utcnow() + timedelta(days=7)  # WHEN TOKEN EXPIRE, RN IT IS 7 DAYS, WILL CHANGE IN PROD
     }
     return jwt.encode(payload, flask_app.secret_key, algorithm='HS256')
@@ -240,7 +241,8 @@ def verify_auth():
                 'id': user_data['user_id'],
                 'name': user_data['user_name'],
                 'email': user_data['user_email'],
-                'team': user_data['team_name']
+                'team': user_data['team_name'],
+                'profilePicture': user_data.get('profile_picture')
             }
         })
     

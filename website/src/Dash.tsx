@@ -7,6 +7,7 @@ interface User {
   name: string;
   email: string;
   team: string;
+  profilePicture?: string;
 }
 
 function Dashboard() {
@@ -263,19 +264,33 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
-      <header style={{ 
-        padding: '20px', 
-        borderBottom: '1px solid #ccc',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div>
-          <h1>Welcome to Dashboard</h1>
-          {user && (
-            <p>Hello, {user.name} from {user.team}</p>
+  <header style={{ 
+    padding: '20px', 
+    borderBottom: '1px solid #ccc',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  }}>
+    <div>
+      <h1>Welcome to Dashboard</h1>
+      {user && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {user.profilePicture && (
+            <img 
+              src={user.profilePicture} 
+              alt={`${user.name}'s profile`}
+              style={{ 
+                width: '40px', 
+                height: '40px', 
+                borderRadius: '50%',
+                objectFit: 'cover'
+              }} 
+            />
           )}
+          <p>Hello, {user.name} from {user.team}</p>
         </div>
+      )}
+    </div>
         <button 
           onClick={handleLogout}
           style={{
