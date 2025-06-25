@@ -23,29 +23,23 @@ function Dashboard() {
   
   const API_BASE = 'https://testblogapi.notafemboy.org/api'
 
-  // Check authentication on component mount
   useEffect(() => {
     console.log('=== DASHBOARD COMPONENT MOUNTED ===');
     console.log('Current URL:', window.location.href);
     console.log('Search params:', Object.fromEntries(searchParams.entries()));
     
-    // First, check if there's a token in the URL (from OAuth callback)
     const authStatus = searchParams.get('auth');
     const urlToken = searchParams.get('token');
     
     if (authStatus === 'success' && urlToken) {
       console.log('DASHBOARD: Found token in URL, storing and verifying...');
-      // Store token in localStorage
       localStorage.setItem('auth_token', urlToken);
       
-      // Clean the URL
       window.history.replaceState({}, document.title, '/dashboard');
       
-      // Verify the token
       checkAuthStatus();
     } else {
       console.log('DASHBOARD: No URL token, checking localStorage...');
-      // Check for existing token in localStorage
       checkAuthStatus();
     }
   }, [searchParams]);
@@ -155,70 +149,88 @@ function Dashboard() {
       throw error;
     }
   };
-
-  const startRecording = async () => {
-    try {
-      setIsRecording(true);
-      setError(null);
-      setTranscription('');
-      setCorrectedText('');
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Media recording not supported in this browser');
+  const toggleMicrophone = async () => {
+    if (!isRecording) {
+      try {
+        setError(null);
+        setIsProcessing(true);
+        
+        const response = await makeApiCall('/start-recording', {
+          method: 'POST'
+        });
+        
+        if (!response) return;
+        
+        if (!response.ok) {
+          throw new Error('Failed to start recording');
+        }
+        
+        const data = await response.json();
+        setIsRecording(true);
+        setIsProcessing(false);
+        console.log('Recording started:', data);
+      } catch (err) {
+        console.error('Error starting recording:', err);
+        setError('Could not start recording. Make sure the API server is running.');
+        setIsProcessing(false);
       }
-
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Note: This is a simplified example. You'll need to implement actual recording logic
-      // using something like MediaRecorder API and then send the audio to your API
-      
-      setTimeout(() => {
+    } else {
+      try {
+        setIsProcessing(true);
+        
+        const response = await makeApiCall('/stop-recording', {
+          method: 'POST'
+        });
+        
+        if (!response) return;
+        
+        if (!response.ok) {
+          throw new Error('Failed to stop recording');
+        }
+        
+        const data = await response.json();
         setIsRecording(false);
-        setTranscription('Sample transcription text...');
-      }, 3000);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start recording');
-      setIsRecording(false);
+        setIsProcessing(false);
+        
+        if (data.transcription) {
+          setTranscription(data.transcription);
+          console.log('Transcription received:', data.transcription);
+          
+          await correctGrammar(data.transcription);
+        } else {
+          setTranscription('No transcription available');
+        }
+        
+        console.log('Recording stopped:', data);
+      } catch (err) {
+        console.error('Error stopping recording:', err);
+        setError('Could not stop recording or get transcription.');
+        setIsRecording(false);
+        setIsProcessing(false);
+      }
     }
   };
-
-  const stopRecording = () => {
-    setIsRecording(false);
-  };
-
-  const correctText = async () => {
-    if (!transcription.trim()) {
-      setError('No text to correct');
-      return;
-    }
-
+  const correctGrammar = async (text: string) => {
     try {
-      setIsProcessing(true);
-      setError(null);
-
-      const response = await makeApiCall('/correct-text', {
+      const response = await makeApiCall('/correct-grammar', {
         method: 'POST',
-        body: JSON.stringify({ text: transcription })
+        body: JSON.stringify({ text })
       });
-
-      if (!response) return; // makeApiCall handles auth failures
-
+      
+      if (!response) return;
+      
       if (response.ok) {
         const data = await response.json();
-        setCorrectedText(data.correctedText);
+        setCorrectedText(data.corrected);
+        console.log('Grammar corrected:', data.corrected);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Failed to correct text');
+        console.error('Grammar correction failed:', errorData);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to correct text');
-    } finally {
-      setIsProcessing(false);
+      console.error('Error correcting grammar:', err);
     }
   };
-
-  // Show loading screen while checking authentication
   if (authLoading) {
     return (
       <div style={{ 
@@ -234,7 +246,6 @@ function Dashboard() {
     );
   }
 
-  // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
       <div style={{ 
@@ -300,7 +311,7 @@ function Dashboard() {
           <div style={{ marginBottom: '20px' }}>
             <h3>Step 1: Record Your Voice</h3>
             <button
-              onClick={isRecording ? stopRecording : startRecording}
+              onClick={toggleMicrophone}
               disabled={isProcessing}
               style={{
                 backgroundColor: isRecording ? '#dc3545' : '#28a745',
@@ -313,7 +324,7 @@ function Dashboard() {
                 opacity: isProcessing ? 0.6 : 1
               }}
             >
-              {isRecording ? '🔴 Stop Recording' : '🎤 Start Recording'}
+              {isProcessing ? 'Processing...' : isRecording ? '🔴 Stop Recording' : '🎤 Start Recording'}
             </button>
             {isRecording && (
               <p style={{ color: '#dc3545', marginTop: '10px' }}>
@@ -339,23 +350,6 @@ function Dashboard() {
                 }}
                 placeholder="Your transcribed text will appear here..."
               />
-              <button
-                onClick={correctText}
-                disabled={isProcessing || !transcription.trim()}
-                style={{
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  borderRadius: '4px',
-                  cursor: isProcessing ? 'not-allowed' : 'pointer',
-                  opacity: isProcessing || !transcription.trim() ? 0.6 : 1,
-                  marginTop: '10px'
-                }}
-              >
-                {isProcessing ? 'Processing...' : 'Correct & Format Text'}
-              </button>
             </div>
           )}
 

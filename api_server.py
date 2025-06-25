@@ -11,21 +11,22 @@ import secrets
 from functools import wraps
 import jwt
 from datetime import datetime, timedelta
+
+from functions.audio_recorder import start_recording, stop_recording, get_transcription
+from functions.correct_grammar import correct_grammar
 load_dotenv()
 
 flask_app = Flask(__name__)
 flask_app.secret_key = os.getenv('SECRET_KEY')
 
-# Add these session configuration settings
-flask_app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
-flask_app.config['SESSION_COOKIE_HTTPONLY'] = False  # Change to False to allow JavaScript access
-flask_app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Required for cross-origin
-flask_app.config['SESSION_COOKIE_DOMAIN'] = '.notafemboy.org'  # This should work for both subdomains
+flask_app.config['SESSION_COOKIE_SECURE'] = False  # MAKE TRU IN PROD
+flask_app.config['SESSION_COOKIE_HTTPONLY'] = False  
+flask_app.config['SESSION_COOKIE_SAMESITE'] = 'None'  
+flask_app.config['SESSION_COOKIE_DOMAIN'] = '.notafemboy.org'  
 flask_app.config['SESSION_COOKIE_PATH'] = '/'
 
 
 
-# Slack Bolt OAuth setup
 oauth_settings = OAuthSettings(
     client_id=os.getenv('SLACK_AUTH_CLIENT_ID'),
     client_secret=os.getenv('SLACK_AUTH_CLIENT_SECRET'),
@@ -34,25 +35,20 @@ oauth_settings = OAuthSettings(
     state_store=FileOAuthStateStore(expiration_seconds=600, base_dir="./data/states"),
 )
 
-# Initialize Slack app with OAuth
 slack_app = App(
     signing_secret=os.getenv('SLACK_AUTH_SIGNING_SECRET'),
     oauth_settings=oauth_settings,
     process_before_response=True
 )
 
-# OAuth flow instance
 oauth_flow = OAuthFlow(settings=oauth_settings)
 
 @flask_app.route('/auth/slack/login')
 def slack_login():
-    # Generate state for security
     state = secrets.token_urlsafe(32)
     
-    # Store state in the OAuth flow's state store
     oauth_flow.settings.state_store.issue(state)
     
-    # Generate authorization URL manually
     authorize_url_generator = AuthorizeUrlGenerator(
         client_id=os.getenv('SLACK_AUTH_CLIENT_ID'),
         user_scopes=["identity.basic", "identity.email", "identity.team"],
@@ -67,6 +63,82 @@ def slack_login():
 
 
 
+
+current_recorder = None
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        token = auth_header.split(' ')[1]
+        user_data = verify_auth_token(token)
+        if not user_data:
+            return jsonify({'error': 'Invalid or expired token'}), 401
+        
+        request.user_data = user_data
+        return f(*args, **kwargs)
+    return decorated_function
+
+@flask_app.route('/api/start-recording', methods=['POST'])
+@require_auth
+def api_start_recording():
+    global current_recorder
+    try:
+        if current_recorder is not None:
+            return jsonify({'error': 'Recording already in progress'}), 400
+        
+        current_recorder = start_recording()
+        return jsonify({'message': 'Recording started', 'status': 'recording'})
+    except Exception as e:
+        return jsonify({'error': f'Failed to start recording: {str(e)}'}), 500
+
+@flask_app.route('/api/stop-recording', methods=['POST'])
+@require_auth
+def api_stop_recording():
+    global current_recorder
+    try:
+        if current_recorder is None:
+            return jsonify({'error': 'No recording in progress'}), 400
+        
+        transcription = get_transcription(current_recorder)
+        stop_recording(current_recorder)
+        current_recorder = None
+        
+        return jsonify({
+            'message': 'Recording stopped',
+            'transcription': transcription,
+            'status': 'stopped'
+        })
+    except Exception as e:
+        current_recorder = None
+        return jsonify({'error': f'Failed to stop recording: {str(e)}'}), 500
+
+@flask_app.route('/api/correct-grammar', methods=['POST'])
+@require_auth
+def api_correct_grammar():
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'error': 'Text is required'}), 400
+        
+        text = data['text']
+        corrected = correct_grammar(text)
+        
+        return jsonify({
+            'original': text,
+            'corrected': corrected
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to correct grammar: {str(e)}'}), 500
+
+
+
+
+
+
+
 # TOKEN CRAP-----------
 def generate_auth_token(user_info, team_info):
     payload = {
@@ -75,7 +147,7 @@ def generate_auth_token(user_info, team_info):
         'user_email': user_info.get('email', ''),
         'team_id': team_info['id'],
         'team_name': team_info['name'],
-        'exp': datetime.utcnow() + timedelta(days=7)  # Token expires in 7 days
+        'exp': datetime.utcnow() + timedelta(days=7)  # WHEN TOKEN EXPIRE, RN IT IS 7 DAYS, WILL CHANGE IN PROD
     }
     return jwt.encode(payload, flask_app.secret_key, algorithm='HS256')
 
@@ -98,7 +170,6 @@ def verify_auth_token(token):
 
 @flask_app.route('/auth/slack/callback')
 def slack_callback():
-    # Handle OAuth callback using the built-in flow
     if 'error' in request.args:
         return redirect('https://blog.notafemboy.org/login?auth=error')
     
@@ -109,17 +180,14 @@ def slack_callback():
         return redirect('https://blog.notafemboy.org/login?auth=error')
     
     try:
-        # Use the OAuth flow which handles state verification internally
         oauth_response = oauth_flow.run_installation(code)
         
         if oauth_response is None:
             return jsonify({'error': 'OAuth flow failed'}), 400
         
-        # Get user identity
         from slack_sdk import WebClient
         client = WebClient(token=oauth_response.user_token)
         
-        # Get user identity information
         identity_response = client.users_identity()
         
         if not identity_response['ok']:
@@ -128,14 +196,12 @@ def slack_callback():
         user_info = identity_response['user']
         team_info = identity_response['team']
         
-        # Generate JWT token instead of using session
         auth_token = generate_auth_token(user_info, team_info)
         
         print("OAuth Response:", oauth_response)
         print("User Info:", user_info)
         print("Team Info:", team_info)
         
-        # Redirect to frontend with token
         return redirect(f'https://blog.notafemboy.org/dashboard?auth=success&token={auth_token}')
         
     except Exception as e:
@@ -150,7 +216,6 @@ def verify_auth():
     print(f"Request headers: {dict(request.headers)}")
     print(f"Request args: {dict(request.args)}")
     
-    # Check for token in Authorization header or query parameter
     auth_header = request.headers.get('Authorization')
     token = None
     
@@ -184,22 +249,6 @@ def verify_auth():
 
 
 
-def require_auth(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        token = auth_header.split(' ')[1]
-        user_data = verify_auth_token(token)
-        if not user_data:
-            return jsonify({'error': 'Invalid or expired token'}), 401
-        
-        # Add user data to request context
-        request.user_data = user_data
-        return f(*args, **kwargs)
-    return decorated_function
 
 @flask_app.route('/auth/logout', methods=['POST'])
 def logout():
@@ -207,16 +256,6 @@ def logout():
     return jsonify({'message': 'Logged out successfully'})
 
 
-
-
-
-def require_auth(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('authenticated'):
-            return jsonify({'error': 'Authentication required'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 @flask_app.route('/api/protected-endpoint')
 @require_auth
@@ -269,12 +308,10 @@ def after_request(response):
     
     origin = request.headers.get('Origin')
     
-    # Only add CORS headers if not already set (to avoid duplicates)
     if origin in allowed_origins and 'Access-Control-Allow-Origin' not in response.headers:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
     
-    # Only add these headers if not already set
     if 'Access-Control-Allow-Headers' not in response.headers:
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
     if 'Access-Control-Allow-Methods' not in response.headers:

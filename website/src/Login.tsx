@@ -21,7 +21,6 @@ function Login() {
     console.log('Current URL:', window.location.href);
     console.log('Search params:', Object.fromEntries(searchParams.entries()));
     
-    // Check for auth success/failure in URL params
     const authStatus = searchParams.get('auth');
     const token = searchParams.get('token');
     
@@ -30,15 +29,12 @@ function Login() {
     
     if (authStatus === 'success' && token) {
       console.log('SUCCESS: Storing token and navigating to dashboard');
-      // Store token in localStorage
       localStorage.setItem('auth_token', token);
       console.log('Token stored in localStorage');
       
-      // Remove token from URL for security
       window.history.replaceState({}, document.title, '/dashboard');
       console.log('URL cleaned, navigating to dashboard');
       
-      // Navigate to dashboard immediately
       navigate('/dashboard');
     } else if (authStatus === 'error') {
       console.log('AUTH ERROR: Setting error state');
@@ -46,7 +42,6 @@ function Login() {
       setAuthLoading(false);
     } else {
       console.log('NO AUTH PARAMS: Checking existing auth status');
-      // Check if user is already authenticated
       checkAuthStatus();
     }
   }, [searchParams, navigate]);
@@ -79,7 +74,6 @@ function Login() {
         if (data.authenticated) {
           console.log('User is authenticated, setting user data and navigating to dashboard');
           setUser(data.user);
-          // Navigate to dashboard if already authenticated
           navigate('/dashboard');
         } else {
           console.log('User not authenticated, removing token');
@@ -113,7 +107,6 @@ function Login() {
     navigate('/login');
   };
 
-  // Show loading spinner while checking authentication
   if (authLoading) {
     console.log('LOGIN: Showing loading spinner');
     return (
@@ -124,7 +117,6 @@ function Login() {
     );
   }
 
-  // If user is already logged in, show welcome message
   if (user) {
     console.log('LOGIN: User is logged in, showing welcome message');
     return (
