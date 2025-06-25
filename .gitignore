@@ -224,6 +224,6 @@ dist-ssr
 *.sw?
 
 
-
+data/*
 
 package-lock.json
