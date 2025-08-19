@@ -2,14 +2,17 @@
 echo Starting Realtime STT Web Application...
 echo.
 
+REM Get the directory where this batch file is located
+set "SCRIPT_DIR=%~dp0"
+
 echo Starting API server with auto-reload...
-start cmd /k "cd /d c:\Users\brent\Documents\Blogging && python -m flask --app api_server run --debug --port 5000"
+start cmd /k "cd /d "%SCRIPT_DIR%" && python -m flask --app api_server run --debug --port 5000"
 
 echo Waiting for API server to start...
 timeout /t 3 /nobreak > nul
 
 echo Starting frontend development server...
-start cmd /k "cd /d c:\Users\brent\Documents\Blogging\website && npm run dev"
+start cmd /k "cd /d "%SCRIPT_DIR%\website" && npm run dev"
 
 echo.
 echo Both servers are starting...
