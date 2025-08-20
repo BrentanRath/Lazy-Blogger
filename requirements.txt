@@ -48,8 +48,7 @@ scikit-learn==1.7.0
 scipy==1.15.2
 setuptools==80.9.0
 six==1.17.0
-slack_bolt==1.23.0
-slack_sdk==3.35.0
+
 soundfile==0.13.1
 spinners==0.0.24
 sympy==1.14.0
