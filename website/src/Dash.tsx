@@ -7,6 +7,14 @@ function Dashboard() {
   const [correctedText, setCorrectedText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedPromptType, setSelectedPromptType] = useState<'blog' | 'project_logging' | 'meeting_notes' | 'creative_writing' | 'technical_docs'>('blog');
+  const promptTypes = {
+    blog: 'Blog Writing',
+    project_logging: 'Project Logging',
+    meeting_notes: 'Meeting Notes',
+    creative_writing: 'Creative Writing',
+    technical_docs: 'Technical Documentation'
+  };
   
   const API_BASE = 'https://testblogapi.notafemboy.org/api'
 
@@ -94,7 +102,7 @@ function Dashboard() {
     try {
       const response = await makeApiCall('/correct-grammar', {
         method: 'POST',
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, prompt_type: selectedPromptType })
       });
       
       if (!response) return;
@@ -111,11 +119,54 @@ function Dashboard() {
       console.error('Error correcting grammar:', err);
     }
   };
+
+  const getUIText = () => {
+    const uiTexts: Record<typeof selectedPromptType, {
+      title: string;
+      subtitle: string;
+      outputTitle: string;
+      outputHeader: string;
+    }> = {
+      blog: {
+        title: 'Voice to Blog',
+        subtitle: 'Transform your voice into polished blog posts',
+        outputTitle: 'Polished Blog Post',
+        outputHeader: 'Generated Blog Post'
+      },
+      project_logging: {
+        title: 'Voice to Project Notes',
+        subtitle: 'Transform your voice into professional project documentation',
+        outputTitle: 'Project Documentation',
+        outputHeader: 'Generated Project Notes'
+      },
+      meeting_notes: {
+        title: 'Voice to Meeting Notes',
+        subtitle: 'Transform your voice into organized meeting documentation',
+        outputTitle: 'Meeting Documentation',
+        outputHeader: 'Generated Meeting Notes'
+      },
+      creative_writing: {
+        title: 'Voice to Creative Writing',
+        subtitle: 'Transform your voice into enhanced creative content',
+        outputTitle: 'Enhanced Creative Text',
+        outputHeader: 'Enhanced Creative Content'
+      },
+      technical_docs: {
+        title: 'Voice to Technical Docs',
+        subtitle: 'Transform your voice into clear technical documentation',
+        outputTitle: 'Technical Documentation',
+        outputHeader: 'Generated Technical Docs'
+      }
+    };
+    return uiTexts[selectedPromptType];
+  };
+
+  const currentUIText = getUIText();
   return (
     <div className="app-container">
       <header className="header">
-        <h1 className="main-title">Voice to Blog</h1>
-        <p className="subtitle">Transform your voice into polished blog posts</p>
+        <h1 className="main-title">{currentUIText.title}</h1>
+        <p className="subtitle">{currentUIText.subtitle}</p>
       </header>
 
       <main className="main-content">
@@ -124,6 +175,24 @@ function Dashboard() {
             {error}
           </div>
         )}
+
+        <div className="prompt-selection-section">
+          <h2>Choose Content Type</h2>
+          <div className="prompt-types-container">
+            {Object.entries(promptTypes).map(([key, label]) => (
+              <label key={key} className="prompt-type-option">
+                <input
+                  type="radio"
+                  name="promptType"
+                  value={key}
+                  checked={selectedPromptType === key}
+                  onChange={(e) => setSelectedPromptType(e.target.value as typeof selectedPromptType)}
+                />
+                <span className="prompt-type-label">{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="recording-section">
           <h2>Record Your Voice</h2>
@@ -164,18 +233,18 @@ function Dashboard() {
 
         {correctedText && (
           <div className="blog-entry-container">
-            <h2>Polished Blog Post</h2>
+            <h2>{currentUIText.outputTitle}</h2>
             <div className="blog-entry">
-              <div className="blog-header">Generated Blog Post</div>
+              <div className="blog-header">{currentUIText.outputHeader}</div>
               <div className="blog-content">{correctedText}</div>
-              <div className="blog-footer">Ready to publish!</div>
+              <div className="blog-footer">Ready to use!</div>
             </div>
             <div className="action-buttons">
               <button className="btn btn-primary">
                 Save as Draft
               </button>
               <button className="btn btn-secondary">
-                Publish Post
+                Export Content
               </button>
             </div>
           </div>

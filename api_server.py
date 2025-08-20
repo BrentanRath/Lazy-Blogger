@@ -61,6 +61,7 @@ def api_correct_grammar():
             return jsonify({'error': 'Text is required'}), 400
         
         text = data['text']
+        prompt_type = data.get('prompt_type', 'blog')  # Default to 'blog' if not specified
         
         # Run the async function in an event loop
         try:
@@ -69,11 +70,12 @@ def api_correct_grammar():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        corrected = loop.run_until_complete(correct_grammar(text))
+        corrected = loop.run_until_complete(correct_grammar(text, prompt_type))
         
         return jsonify({
             'original': text,
-            'corrected': corrected
+            'corrected': corrected,
+            'prompt_type': prompt_type
         })
     except Exception as e:
         return jsonify({'error': f'Failed to correct grammar: {str(e)}'}), 500
@@ -81,6 +83,18 @@ def api_correct_grammar():
 @flask_app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy', 'message': 'API is running'})
+
+@flask_app.route('/api/prompt-types', methods=['GET'])
+def get_prompt_types():
+    from functions.send_prompt_to_api import PROMPT_CONTEXTS
+    prompt_types = {
+        "blog": "Blog Writing",
+        "project_logging": "Project Logging", 
+        "meeting_notes": "Meeting Notes",
+        "creative_writing": "Creative Writing",
+        "technical_docs": "Technical Documentation"
+    }
+    return jsonify({'prompt_types': prompt_types})
 
 @flask_app.before_request
 def handle_preflight():
