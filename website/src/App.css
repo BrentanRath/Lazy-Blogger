@@ -74,6 +74,80 @@
   font-weight: 600;
 }
 
+/* Prompt selection section styles */
+.prompt-selection-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(59, 130, 246, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 2rem;
+}
+
+.prompt-selection-section h2 {
+  color: #1e293b;
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+  font-weight: 600;
+}
+
+.prompt-types-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.prompt-type-option {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  background: rgba(248, 250, 252, 0.8);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.prompt-type-option:hover {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+}
+
+.prompt-type-option input[type="radio"] {
+  margin-right: 0.75rem;
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+}
+
+.prompt-type-option input[type="radio"]:checked + .prompt-type-label {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.prompt-type-option:has(input[type="radio"]:checked) {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+}
+
+.prompt-type-label {
+  font-size: 1rem;
+  color: #374151;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
 /* Microphone container and button */
 .microphone-container {
   display: flex;
